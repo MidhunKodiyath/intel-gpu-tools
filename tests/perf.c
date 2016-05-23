@@ -1534,6 +1534,7 @@ test_short_reads(void)
                 .num_properties = sizeof(properties) / 16,
                 .properties_ptr = (uint64_t)properties,
         };
+	const struct drm_i915_perf_record_header *header;
         size_t record_size = 256 + sizeof(struct drm_i915_perf_record_header);
         size_t page_size = sysconf(_SC_PAGE_SIZE);
         int zero_fd = open("/dev/zero", O_RDWR|O_CLOEXEC);
@@ -1542,7 +1543,7 @@ test_short_reads(void)
         int stream_fd;
         int ret;
 
-        igt_assert(pages);
+	igt_assert(pages);
 
         ret = mprotect(pages + page_size, page_size, PROT_NONE);
         igt_assert_eq(ret, 0);
@@ -1560,10 +1561,19 @@ test_short_reads(void)
          * Don't really expect to see an error record here, but maybe we should
          * handle any gracefully?
          */
-        ret = read(stream_fd,
-                   pages + page_size - record_size,
-                   page_size);
-        igt_assert_eq(ret, record_size);
+         /* ignore invalid sample record by checking the header type*/
+        for (int i = 0; i < 5; i++) {
+		ret = read(stream_fd,pages + page_size - record_size,page_size);
+		header = (void *)(pages + page_size - record_size);
+		igt_assert_eq(header->pad, 0); /* Reserved */
+		if (header->type != DRM_I915_PERF_RECORD_SAMPLE) {
+			igt_debug("ignoring non sample record\n");
+			continue;
+		}
+		break;
+        }
+
+	igt_assert_eq(ret, record_size);
 
         /* A read that can't return a single record because it would result
          * in a fault on buffer overrun should result in an EFAULT error...
