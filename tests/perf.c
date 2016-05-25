@@ -153,7 +153,28 @@ static struct {
 	uint64_t oa_formats_size;
         oa_format *oa_formats;
 
-	void (*test_oa_formats)(void);
+	void (*oa_test_system_wide_paranoid)(void);
+	void (*oa_test_invalid_open_flags)(void);
+	void (*oa_test_invalid_oa_metric_set_id)(void);
+	void (*oa_test_invalid_oa_format_id)(void);
+	void (*oa_test_missing_sample_flags)(void);
+	void (*oa_test_oa_formats)(void);
+	void (*oa_test_invalid_oa_exponent)(void);
+	void (*oa_test_low_oa_exponent_permissions)(void);
+	void (*oa_test_oa_exponents)(int gt_freq_mhz);
+	void (*oa_test_per_context_mode_unprivileged)(void);
+	void (*oa_test_buffer_fill)(void);
+	void (*oa_test_disabled_read_error)(void);
+	void (*oa_test_non_sampling_read_error)(void);
+	void (*oa_test_enable_disable)(void);
+	void (*oa_test_blocking)(void);
+	void (*oa_test_polling)(void);
+	void (*oa_test_short_reads)(void);
+	void (*oa_test_mi_rpc)(void);
+	void (*oa_test_per_ctx_mi_rpc)(void);
+	void (*oa_test_i915_ref_count)(void);
+	void (*oa_test_rc6_disable)(void);
+
 }perf;
 
 static int drm_fd;
@@ -166,9 +187,6 @@ static uint64_t gt_min_freq_mhz = 0;
 static uint64_t gt_max_freq_mhz = 0;
 
 static igt_render_copyfunc_t render_copy = NULL;
-
-static void bdw_test_oa_formats(void);
-static void hsw_test_oa_formats(void);
 
 static int
 __perf_open(int fd, struct drm_i915_perf_open_param *param)
@@ -332,22 +350,6 @@ lookup_hsw_render_basic_id(void)
                  device);
 
         return try_read_u64_file(buf, &perf.render_basic_id);
-}
-
-static void
-init_perf_test(void)
-{
-	if (IS_HASWELL(devid)) {
-		perf.i915_oa_format = I915_OA_FORMAT_A45_B8_C8;
-		perf.oa_formats=hsw_oa_formats;
-		perf.oa_formats_size=ARRAY_SIZE(hsw_oa_formats);
-		perf.test_oa_formats = hsw_test_oa_formats;
-	} else {
-		perf.i915_oa_format = I915_OA_FORMAT_A32u40_A4u32_B8_C8;
-		perf.oa_formats=bdw_oa_formats;
-		perf.oa_formats_size=ARRAY_SIZE(bdw_oa_formats);
-		perf.test_oa_formats = bdw_test_oa_formats;
-	}
 }
 
 static void
@@ -2116,6 +2118,51 @@ test_i915_ref_count(void)
         drm_fd = drm_open_driver_render(DRIVER_INTEL);
 }
 
+static void
+init_perf_test(void)
+{
+	perf.oa_test_system_wide_paranoid = test_system_wide_paranoid;
+	perf.oa_test_invalid_open_flags = test_invalid_open_flags;
+	perf.oa_test_invalid_oa_metric_set_id = test_invalid_oa_metric_set_id;
+	perf.oa_test_invalid_oa_format_id = test_invalid_oa_format_id;
+	perf.oa_test_missing_sample_flags = test_missing_sample_flags;
+	perf.oa_test_invalid_oa_exponent = test_invalid_oa_exponent;
+	perf.oa_test_low_oa_exponent_permissions = test_low_oa_exponent_permissions;
+	perf.oa_test_per_context_mode_unprivileged = test_per_context_mode_unprivileged;
+	perf.oa_test_disabled_read_error = test_disabled_read_error;
+	perf.oa_test_non_sampling_read_error = test_non_sampling_read_error;
+	perf.oa_test_enable_disable = test_enable_disable;
+	perf.oa_test_short_reads = test_short_reads;
+	perf.oa_test_i915_ref_count = test_i915_ref_count;
+	perf.oa_test_rc6_disable = test_rc6_disable;
+
+        if (IS_HASWELL(devid)) {
+		perf.i915_oa_format = I915_OA_FORMAT_A45_B8_C8;
+		perf.oa_formats=hsw_oa_formats;
+		perf.oa_formats_size=ARRAY_SIZE(hsw_oa_formats);
+
+		perf.oa_test_oa_formats = hsw_test_oa_formats;
+		perf.oa_test_oa_exponents = test_oa_exponents;
+		perf.oa_test_buffer_fill = test_buffer_fill;
+		perf.oa_test_blocking = test_blocking;
+		perf.oa_test_polling = test_polling;
+		perf.oa_test_mi_rpc = test_mi_rpc;
+		perf.oa_test_per_ctx_mi_rpc = test_per_ctx_mi_rpc;
+        } else {
+		perf.i915_oa_format = I915_OA_FORMAT_A32u40_A4u32_B8_C8;
+		perf.oa_formats=bdw_oa_formats;
+		perf.oa_formats_size=ARRAY_SIZE(bdw_oa_formats);
+
+		perf.oa_test_oa_formats = bdw_test_oa_formats;
+		perf.oa_test_oa_exponents = NULL;
+		perf.oa_test_buffer_fill = NULL;
+		perf.oa_test_blocking = NULL;
+		perf.oa_test_polling = NULL;
+		perf.oa_test_mi_rpc = NULL;
+		perf.oa_test_per_ctx_mi_rpc = NULL;
+	}
+}
+
 igt_main
 {
         igt_skip_on_simulation();
@@ -2145,68 +2192,111 @@ igt_main
                 igt_require_f(render_copy, "no render-copy function\n");
         }
 
-        igt_subtest("non-system-wide-paranoid")
-                test_system_wide_paranoid();
+	if(perf.oa_test_system_wide_paranoid) {
+		igt_subtest("non-system-wide-paranoid")
+			perf.oa_test_system_wide_paranoid();
+	}
 
-        igt_subtest("invalid-open-flags")
-                test_invalid_open_flags();
+	if(perf.oa_test_invalid_open_flags) {
+		igt_subtest("invalid-open-flags")
+			perf.oa_test_invalid_open_flags();
+	}
 
-        igt_subtest("invalid-oa-metric-set-id")
-                test_invalid_oa_metric_set_id();
+	if(perf.oa_test_invalid_oa_metric_set_id) {
+		igt_subtest("invalid-oa-metric-set-id")
+			perf.oa_test_invalid_oa_metric_set_id();
+	}
 
-        igt_subtest("invalid-oa-format-id")
-                test_invalid_oa_format_id();
+	if(perf.oa_test_invalid_oa_format_id) {
+		igt_subtest("invalid-oa-format-id")
+			perf.oa_test_invalid_oa_format_id();
+	}
 
-        igt_subtest("missing-sample-flags")
-                test_missing_sample_flags();
+	if(perf.oa_test_missing_sample_flags) {
+		igt_subtest("missing-sample-flags")
+			perf.oa_test_missing_sample_flags();
+	}
 
-        igt_subtest("oa-formats")
-                perf.test_oa_formats();
+	if( perf.oa_test_oa_formats) {
+		igt_subtest("oa-formats")
+			perf.oa_test_oa_formats();
+	}
 
-        igt_subtest("invalid-oa-exponent")
-                test_invalid_oa_exponent();
-        igt_subtest("low-oa-exponent-permissions")
-                test_low_oa_exponent_permissions();
-        igt_subtest("oa-exponents") {
-                test_oa_exponents(300);
-                test_oa_exponents(450);
-        }
+	if(perf.oa_test_invalid_oa_exponent) {
+		igt_subtest("invalid-oa-exponent")
+			perf.oa_test_invalid_oa_exponent();
+	}
 
-        igt_subtest("per-context-mode-unprivileged")
-                test_per_context_mode_unprivileged();
+	if(perf.oa_test_low_oa_exponent_permissions) {
+		igt_subtest("low-oa-exponent-permissions")
+			perf.oa_test_low_oa_exponent_permissions();
+	}
 
-        igt_subtest("buffer-fill")
-                test_buffer_fill();
+	if(perf.oa_test_oa_exponents) {
+		igt_subtest("oa-exponents") {
+			perf.oa_test_oa_exponents(300);
+			perf.oa_test_oa_exponents(450);
+		}
+	}
 
-        igt_subtest("disabled-read-error")
-                test_disabled_read_error();
-        igt_subtest("non-sampling-read-error")
-                test_non_sampling_read_error();
+	if(perf.oa_test_per_context_mode_unprivileged) {
+		igt_subtest("per-context-mode-unprivileged")
+			perf.oa_test_per_context_mode_unprivileged();
+	}
 
-        igt_subtest("enable-disable")
-                test_enable_disable();
+	if(perf.oa_test_buffer_fill) {
+		igt_subtest("buffer-fill")
+			perf.oa_test_buffer_fill();
+	}
 
-        igt_subtest("blocking")
-                test_blocking();
+	if(perf.oa_test_disabled_read_error) {
+		igt_subtest("disabled-read-error")
+			perf.oa_test_disabled_read_error();
+	}
 
-        igt_subtest("polling")
-                test_polling();
+	if(perf.oa_test_non_sampling_read_error) {
+		igt_subtest("non-sampling-read-error")
+			perf.oa_test_non_sampling_read_error();
+	}
 
-        igt_subtest("short-reads")
-                test_short_reads();
+	if(perf.oa_test_enable_disable) {
+		igt_subtest("enable-disable")
+			perf.oa_test_enable_disable();
+	}
 
-        igt_subtest("mi-rpc") {
-                test_mi_rpc();
-                test_per_ctx_mi_rpc();
-        }
+	if(perf.oa_test_blocking) {
+		igt_subtest("blocking")
+			perf.oa_test_blocking();
+	}
 
-        igt_subtest("i915-ref-count")
-                test_i915_ref_count();
+	if(perf.oa_test_polling) {
+		igt_subtest("polling")
+			perf.oa_test_polling();
+	}
 
-        igt_subtest("rc6-disable")
-                test_rc6_disable();
+	if(perf.oa_test_short_reads) {
+		igt_subtest("short-reads")
+			perf.oa_test_short_reads();
+	}
 
-        igt_fixture {
+	if((perf.oa_test_mi_rpc) && (perf.oa_test_per_ctx_mi_rpc)) {
+		igt_subtest("mi-rpc") {
+			perf.oa_test_mi_rpc();
+			perf.oa_test_per_ctx_mi_rpc();
+		}
+	}
+
+	if(perf.oa_test_i915_ref_count) {
+		igt_subtest("i915-ref-count")
+			perf.oa_test_i915_ref_count();
+	}
+
+	if(perf.oa_test_rc6_disable) {
+		igt_subtest("rc6-disable")
+			perf.oa_test_rc6_disable();
+	}
+
+	igt_fixture {
                 /* leave sysctl options in their default state... */
                 write_u64_file("/proc/sys/dev/i915/oa_min_timer_exponent", 6);
                 write_u64_file("/proc/sys/dev/i915/perf_stream_paranoid", 1);
