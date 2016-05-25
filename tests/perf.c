@@ -151,6 +151,7 @@ static struct {
 	uint64_t i915_oa_format;
 	uint64_t render_basic_id;
 	uint64_t oa_formats_size;
+	int num_of_eus;
         oa_format *oa_formats;
 
 	void (*oa_test_system_wide_paranoid)(void);
@@ -2118,6 +2119,19 @@ test_i915_ref_count(void)
         drm_fd = drm_open_driver_render(DRIVER_INTEL);
 }
 
+static int
+get_eu_number(void) {
+	drm_i915_getparam_t gp;
+	int n_eus = 0;
+
+	gp.param = I915_PARAM_EU_TOTAL;
+	gp.value = &n_eus;
+	do_ioctl(drm_fd,DRM_IOCTL_I915_GETPARAM, &gp);
+	igt_assert (n_eus > 0);
+
+	return n_eus;
+}
+
 static void
 init_perf_test(void)
 {
@@ -2137,6 +2151,13 @@ init_perf_test(void)
 	perf.oa_test_rc6_disable = test_rc6_disable;
 
         if (IS_HASWELL(devid)) {
+		if (IS_HSW_GT1(devid))
+			perf.num_of_eus = 10;
+		else if (IS_HSW_GT2(devid))
+			perf.num_of_eus = 20;
+		else if (IS_HSW_GT3(devid))
+			perf.num_of_eus = 40;
+
 		perf.i915_oa_format = I915_OA_FORMAT_A45_B8_C8;
 		perf.oa_formats=hsw_oa_formats;
 		perf.oa_formats_size=ARRAY_SIZE(hsw_oa_formats);
@@ -2149,6 +2170,8 @@ init_perf_test(void)
 		perf.oa_test_mi_rpc = test_mi_rpc;
 		perf.oa_test_per_ctx_mi_rpc = test_per_ctx_mi_rpc;
         } else {
+		perf.num_of_eus = get_eu_number();
+
 		perf.i915_oa_format = I915_OA_FORMAT_A32u40_A4u32_B8_C8;
 		perf.oa_formats=bdw_oa_formats;
 		perf.oa_formats_size=ARRAY_SIZE(bdw_oa_formats);
